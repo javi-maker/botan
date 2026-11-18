@@ -2994,13 +2994,16 @@ def zfec_decode(k: int, n: int, indexes: list[int], inputs: list[bytes]) -> list
     :returns: a list of bytes containing the original shares decoded from the provided shares (in `inputs`)
     """
 
+    # FFI botan_zfec_decode reads exactly K entries from indexes and inputs.
+    # Undersized arrays become C-side heap OOB reads.
     if len(inputs) < k:
         raise BotanException('Insufficient inputs for zfec decoding')
+    if len(indexes) < k:
+        raise BotanException('Insufficient indexes for zfec decoding')
 
-    p_size_t = c_size_t * len(indexes)
-    c_indexes = p_size_t(*[c_size_t(index) for index in indexes])
-    p_p_nbytes = c_char_p * n
-    c_inputs = p_p_nbytes(*[c_char_p(inp) for inp in inputs])
+    indexes = list(indexes[:k])
+    inputs = list(inputs[:k])
+
     # all inputs must be the same length
     share_size = len(inputs[0])
     for i in inputs:
@@ -3008,6 +3011,11 @@ def zfec_decode(k: int, n: int, indexes: list[int], inputs: list[bytes]) -> list
             raise ValueError(
                 "Share size mismatch: {} != {}".format(len(i), share_size)
             )
+
+    p_size_t = c_size_t * k
+    c_indexes = p_size_t(*[c_size_t(index) for index in indexes])
+    p_p_nbytes = c_char_p * k
+    c_inputs = p_p_nbytes(*[c_char_p(inp) for inp in inputs])
 
     # allocate memory for our outputs (create_string_buffer creates
     # bytes)
